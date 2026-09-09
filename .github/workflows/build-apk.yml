@@ -1,0 +1,57 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip native]')"
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Expo Prebuild
+        run: npx expo prebuild --platform android --clean
+
+      - name: Configure Gradle Memory
+        run: sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m/' android/gradle.properties
+
+      - name: Build Release APK
+        env:
+          NODE_OPTIONS: "--max-old-space-size=3072"
+        run: |
+          cd android
+          ./gradlew assembleRelease
+
+      - name: Publish Latest Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Delete existing 'latest' release and tag if they exist
+          gh release delete latest --cleanup-tag -y || true
+          
+          # Create new 'latest' release and upload the APK
+          gh release create latest android/app/build/outputs/apk/release/app-release.apk --title "Latest APK" --notes "Download the latest Android APK here."
