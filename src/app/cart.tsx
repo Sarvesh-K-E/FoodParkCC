@@ -80,54 +80,9 @@ export default function CartScreen() {
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const dateStr = `${date.getDate().toString().padStart(2, '0')}-${monthNames[date.getMonth()]}-${date.getFullYear()}`;
 
-      const snameToId: Record<string, string> = { "BREAKFAST": "1", "LUNCH": "2", "SNACKS": "3", "DINNER": "4" };
-      const sname = cartItems[0].sname;
-      const sessionNo = snameToId[sname] || "1";
-
-      // Parallelize Balance Check, Live Menu Check, and Order ID Generation
-      const [balanceRes, liveMenu, orderData] = await Promise.all([
-        api.getBalance(session.regNo),
-        api.getMenu(sessionNo, session.internalId, dateStr),
-        api.getOrderDetails(session.internalId, '1')
-      ]);
-
-      // Validate Balance
-      if (balanceRes && balanceRes[0] && balanceRes[0].bal !== undefined) {
-        const currentBalance = parseFloat(balanceRes[0].bal);
-        if (cartTotalPrice > currentBalance) {
-          alert('You do not have enough funds for this order.');
-          setLoading(false);
-          return;
-        }
-      } else {
-        alert('Could not verify your account balance. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Validate Live Menu
-      if (!liveMenu || !Array.isArray(liveMenu) || liveMenu.length === 0) {
-        alert(`The ${sname} menu is no longer available on the server. Please clear your cart.`);
-        setLoading(false);
-        return;
-      }
-
-      // Cross-reference stock
-      for (const item of cartItems) {
-        const liveItem = liveMenu.find((m: any) => (m.meitid || m.pid)?.toString() === item.pid?.toString());
-        if (!liveItem) {
-          alert(`"${item.ides}" is no longer available in the menu.`);
-          setLoading(false);
-          return;
-        }
-        const liveStock = liveItem.StockQty !== undefined ? liveItem.StockQty : 999;
-        if (liveStock < item.quantity) {
-          alert(`Out of stock! Only ${liveStock} left for "${item.ides}". You have ${item.quantity} in your cart.`);
-          setLoading(false);
-          return;
-        }
-      }
-
+      // Generate Order ID directly (Server will validate stock and balance internally)
+      const orderData = await api.getOrderDetails(session.internalId, '1');
+      
       // Validate Order ID
       if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
         throw new Error('Failed to generate order ID');
