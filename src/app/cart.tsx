@@ -68,7 +68,30 @@ export default function CartScreen() {
         return;
       }
 
-      const balanceRes = await api.getBalance(session.regNo);
+      // Ensure all items have the required metadata (in case of old cart state)
+      const missingMetadata = cartItems.some((c: any) => !c.skid || !c.tb);
+      if (missingMetadata) {
+        alert('Cart contains outdated items. Please clear your cart and add them again.');
+        setLoading(false);
+        return;
+      }
+
+      const date = new Date();
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const dateStr = `${date.getDate().toString().padStart(2, '0')}-${monthNames[date.getMonth()]}-${date.getFullYear()}`;
+
+      const snameToId: Record<string, string> = { "BREAKFAST": "1", "LUNCH": "2", "SNACKS": "3", "DINNER": "4" };
+      const sname = cartItems[0].sname;
+      const sessionNo = snameToId[sname] || "1";
+
+      // Parallelize Balance Check, Live Menu Check, and Order ID Generation
+      const [balanceRes, liveMenu, orderData] = await Promise.all([
+        api.getBalance(session.regNo),
+        api.getMenu(sessionNo, session.internalId, dateStr),
+        api.getOrderDetails(session.internalId, '1')
+      ]);
+
+      // Validate Balance
       if (balanceRes && balanceRes[0] && balanceRes[0].bal !== undefined) {
         const currentBalance = parseFloat(balanceRes[0].bal);
         if (cartTotalPrice > currentBalance) {
@@ -82,25 +105,7 @@ export default function CartScreen() {
         return;
       }
 
-      // Step 1: Get Order ID Details
-      // Ensure all items have the required metadata (in case of old cart state)
-      const missingMetadata = cartItems.some((c: any) => !c.skid || !c.tb);
-      if (missingMetadata) {
-        alert('Cart contains outdated items. Please clear your cart and add them again.');
-        setLoading(false);
-        return;
-      }
-
-      const date = new Date();
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const dateStr = `${date.getDate().toString().padStart(2, '0')}-${monthNames[date.getMonth()]}-${date.getFullYear()}`;
-
-      // Step 0.5: Verify Live Stock
-      const snameToId: Record<string, string> = { "BREAKFAST": "1", "LUNCH": "2", "SNACKS": "3", "DINNER": "4" };
-      const sname = cartItems[0].sname;
-      const sessionNo = snameToId[sname] || "1";
-      
-      const liveMenu = await api.getMenu(sessionNo, session.internalId, dateStr);
+      // Validate Live Menu
       if (!liveMenu || !Array.isArray(liveMenu) || liveMenu.length === 0) {
         alert(`The ${sname} menu is no longer available on the server. Please clear your cart.`);
         setLoading(false);
@@ -123,7 +128,7 @@ export default function CartScreen() {
         }
       }
 
-      const orderData = await api.getOrderDetails(session.internalId, '1');
+      // Validate Order ID
       if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
         throw new Error('Failed to generate order ID');
       }
@@ -179,16 +184,12 @@ export default function CartScreen() {
       const payRes = await api.payOrder(paymentPayload);
       
       if (typeof payRes === 'string' && payRes.startsWith('1|')) {
-        // Background sync to ensure offline availability immediately
+        // Parallelize cache syncing to save time while ensuring completion
         try {
-          const historyRes = await api.getOrderHistory(session.internalId);
-          if (historyRes && Array.isArray(historyRes)) {
-            // Only fetch QR code for the specific order we just placed to optimize speed
-            const newOrder = historyRes.find((o: any) => (o.OrderId || o.OrderNumber || o.orderId || '').toString() === orderNo.toString());
-            if (newOrder && (newOrder.Status === 'Success' || newOrder.status === 'Success')) {
-              await api.getQRData(orderNo).catch(() => {});
-            }
-          }
+          await Promise.allSettled([
+            api.getOrderHistory(session.internalId),
+            api.getQRData(orderNo)
+          ]);
         } catch (err) {
           console.error("Failed to sync offline history", err);
         }
