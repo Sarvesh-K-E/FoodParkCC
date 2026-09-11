@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Image, Platform, Modal, AppState, Pressable } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Image, Platform, Modal, AppState, Pressable, ScrollView } from 'react-native';
 import { Stack } from 'expo-router';
 import * as Brightness from 'expo-brightness';
 import Svg, { Path } from 'react-native-svg';
@@ -23,7 +23,10 @@ export default function HistoryScreen() {
   };
 
   const [selectedQR, setSelectedQR] = useState<string | null>(null);
+  const activeQR = useRef<string | null>(null);
   const [loadingQR, setLoadingQR] = useState<string | null>(null);
+  const [selectedOrderItems, setSelectedOrderItems] = useState<any[] | null>(null);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState<string | null>(null);
   const [debugData, setDebugData] = useState<string>('');
   const [autoBrightness, setAutoBrightness] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -90,6 +93,7 @@ export default function HistoryScreen() {
             orderId: (order.OrderId || order.OrderNumber || order.orderId || '').toString(),
             sname: order.sname || 'Order',
             date: order.OrderDate || order.dtstr || order.date || new Date().toLocaleDateString(),
+            time: order.OrderTime || '',
             total: order.NetAmount || order.ItemTotal || order.total || 0,
             status: order.Status || order.status || 'Unknown',
             cancelStatus: order.CancelStatus || ''
@@ -119,9 +123,10 @@ export default function HistoryScreen() {
 
   const showQR = async (orderId: string) => {
     setLoadingQR(orderId);
+    activeQR.current = orderId;
     try {
       const handleData = (rawB64: any) => {
-        if (rawB64) {
+        if (rawB64 && activeQR.current === orderId) {
           const cleanB64 = String(rawB64).replace(/^"|"$/g, '').trim();
           setSelectedQR(`data:image/png;base64,${cleanB64}`);
           setLoadingQR(null);
@@ -133,7 +138,24 @@ export default function HistoryScreen() {
     } catch (e) {
       console.error(e);
       alert('Failed to load QR Code.');
-      setLoadingQR(null);
+      if (activeQR.current === orderId) setLoadingQR(null);
+    }
+  };
+
+  const showOrderDetails = async (orderId: string) => {
+    setLoadingOrderDetails(orderId);
+    try {
+      const res = await api.getOrderItems(orderId);
+      if (res && Array.isArray(res)) {
+        setSelectedOrderItems(res);
+      } else {
+        alert('Could not load order details.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to fetch order details.');
+    } finally {
+      setLoadingOrderDetails(null);
     }
   };
 
@@ -143,17 +165,26 @@ export default function HistoryScreen() {
         <Text style={styles.dateText}>{item.sname}</Text>
         <Text style={item.status === 'Success' ? styles.statusSuccess : item.status === 'Open' ? styles.statusFailed : styles.statusPending}>{item.status === 'Open' ? 'Failed' : item.status}</Text>
       </View>
-      <Text style={styles.itemText}>{item.date}</Text>
+      <Text style={styles.itemText}>{item.date}{item.time ? ` at ${item.time}` : ''}</Text>
       <Text style={styles.totalText}>₹{item.total}.00</Text>
-      {item.status === 'Success' && (
-        <TouchableOpacity style={styles.qrBtn} onPress={() => showQR(item.orderId)} disabled={loadingQR === item.orderId}>
-          {loadingQR === item.orderId ? (
+      <View style={styles.actionRow}>
+        <TouchableOpacity style={styles.detailsBtn} onPress={() => showOrderDetails(item.orderId)} disabled={loadingOrderDetails === item.orderId}>
+          {loadingOrderDetails === item.orderId ? (
             <ActivityIndicator color={isDark ? '#fff' : '#000'} size="small" />
           ) : (
-            <Text style={styles.qrBtnText}>Show QR</Text>
+            <Text style={styles.detailsBtnText}>Details</Text>
           )}
         </TouchableOpacity>
-      )}
+        {item.status === 'Success' && (
+          <TouchableOpacity style={styles.qrBtn} onPress={() => showQR(item.orderId)} disabled={loadingQR === item.orderId}>
+            {loadingQR === item.orderId ? (
+              <ActivityIndicator color={isDark ? '#fff' : '#000'} size="small" />
+            ) : (
+              <Text style={styles.qrBtnText}>Show QR</Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
     </View>
   );
 
@@ -203,12 +234,40 @@ export default function HistoryScreen() {
         visible={!!selectedQR} 
         transparent 
         animationType="fade"
-        onRequestClose={() => setSelectedQR(null)}
+        onRequestClose={() => { setSelectedQR(null); activeQR.current = null; }}
       >
-        <Pressable style={styles.modalContainer} onPress={() => setSelectedQR(null)}>
+        <Pressable style={styles.modalContainer} onPress={() => { setSelectedQR(null); activeQR.current = null; }}>
           <Pressable style={styles.qrWrapper} onPress={(e) => e.stopPropagation()}>
             <Image source={{ uri: selectedQR! }} style={styles.qrImage} resizeMode="contain" />
-            <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedQR(null)}>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => { setSelectedQR(null); activeQR.current = null; }}>
+              <Text style={styles.closeBtnText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal 
+        visible={selectedOrderItems !== null} 
+        transparent 
+        animationType="none"
+        onRequestClose={() => setSelectedOrderItems(null)}
+      >
+        <Pressable style={styles.detailsModalContainer} onPress={() => setSelectedOrderItems(null)}>
+          <Pressable style={styles.detailsModalWrapper} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Order Details</Text>
+            <View style={styles.detailsDivider} />
+            <ScrollView style={{ width: '100%', maxHeight: 300 }}>
+              {selectedOrderItems?.map((item: any, index: number) => (
+                <View key={index} style={styles.detailsItemRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.detailsItemName}>{item.itmdes}</Text>
+                    <Text style={styles.detailsItemQty}>Qty: {item.pqty}</Text>
+                  </View>
+                  <Text style={styles.detailsItemPrice}>₹{item.itot}.00</Text>
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedOrderItems(null)}>
               <Text style={styles.closeBtnText}>Close</Text>
             </TouchableOpacity>
           </Pressable>
@@ -312,12 +371,36 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 16,
+    flex: 1,
   },
   qrBtnText: { color: '#FFFFFF', fontWeight: '600' },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 16,
+  },
+  detailsBtn: {
+    backgroundColor: isDark ? '#334155' : '#E2E8F0',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+  },
+  detailsBtnText: {
+    color: isDark ? '#F8FAFC' : '#0F172A',
+    fontWeight: '600',
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: isDark ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  detailsModalContainer: {
+    flex: 1,
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -382,5 +465,46 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-  }
+  },
+  detailsModalWrapper: {
+    backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  detailsDivider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: isDark ? '#334155' : '#E2E8F0',
+    marginVertical: 16,
+  },
+  detailsItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  detailsItemName: {
+    color: isDark ? '#F8FAFC' : '#0F172A',
+    fontSize: 15,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  detailsItemQty: {
+    color: isDark ? '#94A3B8' : '#64748B',
+    fontSize: 13,
+  },
+  detailsItemPrice: {
+    color: isDark ? '#38BDF8' : '#0EA5E9',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
 });

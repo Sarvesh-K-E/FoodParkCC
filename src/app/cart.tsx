@@ -91,6 +91,38 @@ export default function CartScreen() {
         return;
       }
 
+      const date = new Date();
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const dateStr = `${date.getDate().toString().padStart(2, '0')}-${monthNames[date.getMonth()]}-${date.getFullYear()}`;
+
+      // Step 0.5: Verify Live Stock
+      const snameToId: Record<string, string> = { "BREAKFAST": "1", "LUNCH": "2", "SNACKS": "3", "DINNER": "4" };
+      const sname = cartItems[0].sname;
+      const sessionNo = snameToId[sname] || "1";
+      
+      const liveMenu = await api.getMenu(sessionNo, session.internalId, dateStr);
+      if (!liveMenu || !Array.isArray(liveMenu) || liveMenu.length === 0) {
+        alert(`The ${sname} menu is no longer available on the server. Please clear your cart.`);
+        setLoading(false);
+        return;
+      }
+
+      // Cross-reference stock
+      for (const item of cartItems) {
+        const liveItem = liveMenu.find((m: any) => (m.meitid || m.pid)?.toString() === item.pid?.toString());
+        if (!liveItem) {
+          alert(`"${item.ides}" is no longer available in the menu.`);
+          setLoading(false);
+          return;
+        }
+        const liveStock = liveItem.StockQty !== undefined ? liveItem.StockQty : 999;
+        if (liveStock < item.quantity) {
+          alert(`Out of stock! Only ${liveStock} left for "${item.ides}". You have ${item.quantity} in your cart.`);
+          setLoading(false);
+          return;
+        }
+      }
+
       const orderData = await api.getOrderDetails(session.internalId, '1');
       if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
         throw new Error('Failed to generate order ID');
@@ -100,10 +132,6 @@ export default function CartScreen() {
       // Step 2: Insert Items
       const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
       const currentDay = dayNames[new Date().getDay()];
-      
-      const date = new Date();
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const dateStr = `${date.getDate().toString().padStart(2, '0')}-${monthNames[date.getMonth()]}-${date.getFullYear()}`;
       
       const insertPayload = {
         items: cartItems.map((c: any) => ({
@@ -152,18 +180,18 @@ export default function CartScreen() {
       
       if (typeof payRes === 'string' && payRes.startsWith('1|')) {
         // Background sync to ensure offline availability immediately
-        api.getOrderHistory(session.internalId)
-          .then((res) => {
-            if (Array.isArray(res)) {
-              res.forEach((order: any) => {
-                if (order.Status === 'Success' || order.status === 'Success') {
-                  const oid = (order.OrderId || order.OrderNumber || order.orderId || '').toString();
-                  if (oid) api.getQRData(oid).catch(() => {});
-                }
-              });
+        try {
+          const historyRes = await api.getOrderHistory(session.internalId);
+          if (historyRes && Array.isArray(historyRes)) {
+            // Only fetch QR code for the specific order we just placed to optimize speed
+            const newOrder = historyRes.find((o: any) => (o.OrderId || o.OrderNumber || o.orderId || '').toString() === orderNo.toString());
+            if (newOrder && (newOrder.Status === 'Success' || newOrder.status === 'Success')) {
+              await api.getQRData(orderNo).catch(() => {});
             }
-          })
-          .catch(() => {});
+          }
+        } catch (err) {
+          console.error("Failed to sync offline history", err);
+        }
 
         clearCart();
         setSuccess(true);

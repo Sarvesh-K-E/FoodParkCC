@@ -38,10 +38,6 @@ function InnerLayout() {
       // iOS does not support native install prompts, so we must show our own
       const isIos = () => /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
       const isIosStandalone = () => ('standalone' in window.navigator) && (window.navigator as any).standalone;
-      
-      if (isIos() && !isIosStandalone()) {
-        setShowPWA(true);
-      }
     }
   }, []);
 

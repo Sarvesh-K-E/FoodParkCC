@@ -91,9 +91,11 @@ export const setIncludeTodayPref = async (val: boolean) => {
 export const getSession = () => sessionData;
 
 let globalCart: any = {};
+let globalMenuCache: any = {};
+
 export const getCart = () => globalCart;
 export const updateCart = (newCart: any) => { globalCart = newCart; };
-export const clearCart = () => { globalCart = {}; };
+export const clearCart = () => { globalCart = {}; globalMenuCache = {}; };
 
 const BASE_URL = Platform.OS === 'web' 
   ? 'https://foodparkcc.fpcc.workers.dev'
@@ -101,7 +103,6 @@ const BASE_URL = Platform.OS === 'web'
 
 const CACHEABLE_ENDPOINTS = [
   '/api/getstudWBalinfo', 
-  '/api/GetOptionMenuItems', 
   '/api/GetOrderList', 
   '/api/orderQR'
 ];
@@ -141,13 +142,19 @@ const request = async (endpoint: string, data: any = null, method = 'POST', onCa
 
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 8000); // 8 second timeout
+    const id = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     options.signal = controller.signal as any;
 
     const response = await fetch(url, options);
     clearTimeout(id);
     
     const text = await response.text();
+    
+    // Proodle returns HTML strings on 500 Internal Server errors.
+    // We MUST throw an error here so the cache fallback is triggered!
+    if (!response.ok || text.trim().startsWith('<') || text.trim().startsWith('<!DOCTYPE')) {
+      throw new Error(`Server returned invalid response: ${response.status}`);
+    }
     
     if (isCacheable(endpoint)) {
       AsyncStorage.setItem(cacheKey, text).catch(() => {});
@@ -173,6 +180,10 @@ const request = async (endpoint: string, data: any = null, method = 'POST', onCa
       } catch(e) {}
     }
     
+    if (error?.name === 'AbortError' || (error?.message && error.message.includes('abort'))) {
+      throw new Error("Network timeout: The server took too long to respond. Please check your connection.");
+    }
+    
     throw error;
   }
 };
@@ -183,8 +194,18 @@ export const api = {
   logout: (mobileNo: string) => request('/api/ulogout', { mobno: mobileNo }),
   checkSession: (mobileNo: string, logId: string) => request('/api/chkuserstat', { mobno: mobileNo, logid: logId }),
   getBalance: (regNo: string) => request(`/api/getstudWBalinfo?rno=${regNo}`, null, 'GET'),
-  getMenu: (sessionNo: string, internalId: string, dateStr: string) => request('/api/GetOptionMenuItems', { DocumentNo: '6', SessionNo: sessionNo, mobno: internalId, flg: '2', oid: '2', odt: dateStr }),
+  getMenu: async (sessionNo: string, internalId: string, dateStr: string) => {
+    const cacheKey = `menu_${sessionNo}_${dateStr}`;
+    if (globalMenuCache[cacheKey]) return globalMenuCache[cacheKey];
+    
+    const res = await request('/api/GetOptionMenuItems', { DocumentNo: '6', SessionNo: sessionNo, mobno: internalId, flg: '2', oid: '2', odt: dateStr });
+    if (res && Array.isArray(res) && res.length > 0) {
+      globalMenuCache[cacheKey] = res;
+    }
+    return res;
+  },
   getOrderHistory: (internalId: string, onCachedData?: (data: any) => void) => request('/api/GetOrderList', `{MobileNo:'${internalId}'}`, 'POST', onCachedData),
+  getOrderItems: (orderId: string) => request('/api/GetStudordItemdet', `{MobileNo:'${orderId}'}`, 'POST'),
   getOrderDetails: (mobileNo: string, tableNo: string = '1') => request('/api/GetOrderIdDetails', { MobileNo: mobileNo, TableNo: tableNo }),
   placeOrder: (payload: any) => request('/api/GetOutletListInsert', payload),
   payOrder: (payload: any) => request('/api/OnlineWPayment', payload)
