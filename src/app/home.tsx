@@ -110,6 +110,13 @@ export default function HomeScreen() {
     }
   }, []);
 
+  // =========================================================================
+  // ALGORITHM: Network-Based Concurrent Session Detection (Commented Out)
+  // =========================================================================
+  // This algorithm queries all 4 sessions concurrently to find the first one 
+  // that returns a non-empty menu. It is highly accurate but slower than local 
+  // time checks. Kept here for reference in case Proodle's timings change unpredictably.
+  /*
   const findActiveSession = async () => {
     const session = getSession();
     const date = new Date();
@@ -139,6 +146,19 @@ export default function HomeScreen() {
       checkSession('4');
     });
   };
+  */
+
+  // =========================================================================
+  // ALGORITHM: Instant Local Time-Based Session Detection
+  // =========================================================================
+  // Mathematically deduces the current active dining session instantly based on device time.
+  const getInstantActiveSession = () => {
+    const hour = new Date().getHours();
+    if (hour < 11) return '1'; // Midnight - 10:59 AM (Breakfast)
+    if (hour < 15) return '2'; // 11:00 AM - 2:59 PM (Lunch)
+    if (hour < 18) return '3'; // 3:00 PM - 5:59 PM (Snacks)
+    return '4';                // 6:00 PM - 11:59 PM (Dinner)
+  };
 
   useEffect(() => {
     const checkPrompt = async () => {
@@ -152,7 +172,7 @@ export default function HomeScreen() {
     fetchBalance();
     const init = async () => {
       setLoadingItems(true);
-      const target = await findActiveSession();
+      const target = getInstantActiveSession();
       setSelectedSession(target);
       await fetchMenu(target, true);
       setInitialLoadDone(true);
