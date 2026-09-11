@@ -139,15 +139,11 @@ export default function CartScreen() {
       const payRes = await api.payOrder(paymentPayload);
       
       if (typeof payRes === 'string' && payRes.startsWith('1|')) {
-        // Parallelize cache syncing to save time while ensuring completion
-        try {
-          await Promise.allSettled([
-            api.getOrderHistory(session.internalId),
-            api.getQRData(orderNo)
-          ]);
-        } catch (err) {
-          console.error("Failed to sync offline history", err);
-        }
+        // Fire and forget cache syncing in the background for maximum checkout speed
+        Promise.allSettled([
+          api.getOrderHistory(session.internalId),
+          api.getQRData(orderNo)
+        ]).catch(err => console.error("Failed to sync offline history", err));
 
         clearCart();
         setSuccess(true);

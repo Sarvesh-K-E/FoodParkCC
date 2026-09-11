@@ -320,8 +320,8 @@ export default function HomeScreen() {
         <Image source={{ uri: item.img }} style={styles.image} />
         <View style={styles.cardInfo}>
           <Text style={styles.itemName}>{item.ides}</Text>
-          {item.ldes && <Text style={styles.itemSubName}>{item.ldes}</Text>}
-          {item.skudes && <Text style={styles.itemStall}>Stall: {item.skudes}</Text>}
+          {item.ldes ? <Text style={styles.itemSubName}>{item.ldes}</Text> : null}
+          {item.skudes ? <Text style={styles.itemStall}>Stall: {item.skudes}</Text> : null}
           <Text style={styles.itemPrice}>₹{item.rt}.00</Text>
           {item.stockQty > 0 && item.stockQty < 999 && (
             <Text style={styles.itemStock}>{item.stockQty} left in stock</Text>

@@ -89,7 +89,7 @@ export default function HistoryScreen() {
             }
           });
 
-          setOrders(res.map(order => ({
+          const parsedOrders = res.map(order => ({
             orderId: (order.OrderId || order.OrderNumber || order.orderId || '').toString(),
             sname: order.sname || 'Order',
             date: order.OrderDate || order.dtstr || order.date || new Date().toLocaleDateString(),
@@ -97,7 +97,9 @@ export default function HistoryScreen() {
             total: order.NetAmount || order.ItemTotal || order.total || 0,
             status: order.Status || order.status || 'Unknown',
             cancelStatus: order.CancelStatus || ''
-          })));
+          }));
+
+          setOrders(parsedOrders);
         } else {
           setDebugData(typeof res === 'object' ? JSON.stringify(res) : String(res));
           setOrders([]);
@@ -162,28 +164,33 @@ export default function HistoryScreen() {
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.orderCard}>
       <View style={styles.orderHeader}>
-        <Text style={styles.dateText}>{item.sname}</Text>
+        <Text style={styles.dateText} numberOfLines={1} ellipsizeMode="tail">
+          {item.sname} <Text style={{ color: isDark ? '#38BDF8' : '#0EA5E9', fontWeight: 'bold' }}>• ₹{item.total}.00</Text>
+        </Text>
         <Text style={item.status === 'Success' ? styles.statusSuccess : item.status === 'Open' ? styles.statusFailed : styles.statusPending}>{item.status === 'Open' ? 'Failed' : item.status}</Text>
       </View>
-      <Text style={styles.itemText}>{item.date}{item.time ? ` at ${item.time}` : ''}</Text>
-      <Text style={styles.totalText}>₹{item.total}.00</Text>
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.detailsBtn} onPress={() => showOrderDetails(item.orderId)} disabled={loadingOrderDetails === item.orderId}>
-          {loadingOrderDetails === item.orderId ? (
-            <ActivityIndicator color={isDark ? '#fff' : '#000'} size="small" />
-          ) : (
-            <Text style={styles.detailsBtnText}>Details</Text>
-          )}
-        </TouchableOpacity>
-        {item.status === 'Success' && (
-          <TouchableOpacity style={styles.qrBtn} onPress={() => showQR(item.orderId)} disabled={loadingQR === item.orderId}>
-            {loadingQR === item.orderId ? (
+      <View style={styles.bottomRow}>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.detailsBtn} onPress={() => showOrderDetails(item.orderId)} disabled={loadingOrderDetails === item.orderId}>
+            {loadingOrderDetails === item.orderId ? (
               <ActivityIndicator color={isDark ? '#fff' : '#000'} size="small" />
             ) : (
-              <Text style={styles.qrBtnText}>Show QR</Text>
+              <Text style={styles.detailsBtnText}>Details</Text>
             )}
           </TouchableOpacity>
-        )}
+          {item.status === 'Success' && (
+            <TouchableOpacity style={styles.qrBtn} onPress={() => showQR(item.orderId)} disabled={loadingQR === item.orderId}>
+              {loadingQR === item.orderId ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.qrBtnText}>Show QR</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+        <View style={styles.dateTimeContainer}>
+          <Text style={styles.itemText}>{item.date}{item.time ? ` • ${item.time}` : ''}</Text>
+        </View>
       </View>
     </View>
   );
@@ -249,21 +256,23 @@ export default function HistoryScreen() {
       <Modal 
         visible={selectedOrderItems !== null} 
         transparent 
-        animationType="none"
+        animationType="fade"
         onRequestClose={() => setSelectedOrderItems(null)}
       >
-        <Pressable style={styles.detailsModalContainer} onPress={() => setSelectedOrderItems(null)}>
+        <Pressable style={styles.modalContainer} onPress={() => setSelectedOrderItems(null)}>
           <Pressable style={styles.detailsModalWrapper} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Order Details</Text>
             <View style={styles.detailsDivider} />
             <ScrollView style={{ width: '100%', maxHeight: 300 }}>
               {selectedOrderItems?.map((item: any, index: number) => (
                 <View key={index} style={styles.detailsItemRow}>
-                  <View style={{ flex: 1 }}>
+                  <View style={styles.detailsItemNameContainer}>
                     <Text style={styles.detailsItemName}>{item.itmdes}</Text>
-                    <Text style={styles.detailsItemQty}>Qty: {item.pqty}</Text>
                   </View>
-                  <Text style={styles.detailsItemPrice}>₹{item.itot}.00</Text>
+                  <View style={styles.detailsItemRight}>
+                    <Text style={styles.detailsItemQty}>x{item.pqty}</Text>
+                    <Text style={styles.detailsItemPrice}>₹{item.itot}.00</Text>
+                  </View>
                 </View>
               ))}
             </ScrollView>
@@ -347,60 +356,68 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
   orderCard: {
     backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
     borderRadius: 8,
-    padding: 16,
-    marginBottom: 16,
+    padding: 12,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: isDark ? '#334155' : '#E2E8F0',
   },
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: isDark ? '#334155' : '#E2E8F0',
-    paddingBottom: 12,
-    marginBottom: 12,
-  },
-  dateText: { color: isDark ? '#F8FAFC' : '#0F172A', fontSize: 16, fontWeight: 'bold' },
-  statusSuccess: { color: '#10B981', fontWeight: 'bold' },
-  statusFailed: { color: '#EF4444', fontWeight: 'bold' },
-  statusPending: { color: '#F59E0B', fontWeight: 'bold' },
-  itemText: { color: isDark ? '#94A3B8' : '#475569', fontSize: 14, marginBottom: 4 },
-  totalText: { color: isDark ? '#2563EB' : '#1D4ED8', fontSize: 16, fontWeight: 'bold', marginTop: 12 },
-  qrBtn: {
-    backgroundColor: isDark ? '#2563EB' : '#1D4ED8',
-    padding: 12,
-    borderRadius: 8,
     alignItems: 'center',
-    flex: 1,
   },
-  qrBtnText: { color: '#FFFFFF', fontWeight: '600' },
-  actionRow: {
+  dateText: { color: isDark ? '#F8FAFC' : '#0F172A', fontSize: 14, fontWeight: 'bold', flex: 1, marginRight: 8 },
+  statusSuccess: { color: '#10B981', fontWeight: 'bold', fontSize: 12 },
+  statusFailed: { color: '#EF4444', fontWeight: 'bold', fontSize: 12 },
+  statusPending: { color: '#F59E0B', fontWeight: 'bold', fontSize: 12 },
+  bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 12,
-    marginTop: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  qrBtn: {
+    backgroundColor: isDark ? '#2563EB' : '#1D4ED8',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 12 },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    gap: 8,
+  },
+  dateTimeContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  itemText: { 
+    color: isDark ? '#94A3B8' : '#64748B', 
+    fontSize: 12, 
+    fontWeight: 'normal',
+    textAlign: 'right',
   },
   detailsBtn: {
     backgroundColor: isDark ? '#334155' : '#E2E8F0',
-    padding: 12,
-    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'center',
   },
   detailsBtnText: {
     color: isDark ? '#F8FAFC' : '#0F172A',
     fontWeight: '600',
+    fontSize: 12,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: isDark ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  detailsModalContainer: {
-    flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: isDark ? 'rgba(0,0,0,0.85)' : 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -487,20 +504,30 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
   },
   detailsItemRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 12,
     paddingHorizontal: 4,
   },
+  detailsItemNameContainer: {
+    flex: 1,
+    marginRight: 10,
+  },
   detailsItemName: {
     color: isDark ? '#F8FAFC' : '#0F172A',
-    fontSize: 15,
-    fontWeight: '600',
-    marginBottom: 4,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  detailsItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 80,
+    justifyContent: 'flex-end',
   },
   detailsItemQty: {
     color: isDark ? '#94A3B8' : '#64748B',
-    fontSize: 13,
+    fontSize: 14,
+    marginRight: 12,
   },
   detailsItemPrice: {
     color: isDark ? '#38BDF8' : '#0EA5E9',
