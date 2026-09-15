@@ -137,6 +137,9 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.footerContainer}>
+          <Text style={[styles.disclaimerText, { fontWeight: '600', fontSize: 13, color: isDark ? '#38BDF8' : '#0284C7', marginBottom: 8 }]}>
+            Your Login ID and PIN are never stored on any external database. All sensitive data is saved securely and strictly on your local device.
+          </Text>
           <Text style={styles.disclaimerText}>
             FoodParkCC is an unofficial third-party client and is not affiliated with or endorsed by VIT Chennai or Proodle. Please read our GitHub README for information about privacy, security, data handling, and terms of use.
           </Text>

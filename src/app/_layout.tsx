@@ -26,7 +26,6 @@ function InnerLayout() {
     }
   }, [isDark]);
 
-  const [showPWA, setShowPWA] = useState(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -66,25 +65,6 @@ function InnerLayout() {
         <Stack.Screen name="history" options={{ title: 'Orders' }} />
       </Stack>
 
-      {showPWA && (
-        <View style={{
-          position: 'absolute', bottom: 20, left: 20, right: 20,
-          backgroundColor: isDark ? '#1E293B' : '#FFFFFF',
-          padding: 16, borderRadius: 12,
-          shadowColor: '#000', shadowOffset: { width:0, height:10 }, shadowOpacity: 0.3, shadowRadius: 20,
-          elevation: 10, zIndex: 9999, flexDirection: 'row', alignItems: 'center'
-        }}>
-          <View style={{flex: 1}}>
-            <Text style={{color: isDark ? '#F8FAFC' : '#0F172A', fontWeight: 'bold', fontSize: 16}}>Install FoodParkCC</Text>
-            <Text style={{color: isDark ? '#94A3B8' : '#475569', fontSize: 14, marginTop: 4}}>
-              Tap your browser's menu or Share button and select "Add to Home Screen" to install the app!
-            </Text>
-          </View>
-          <TouchableOpacity onPress={() => setShowPWA(false)} style={{padding: 8, paddingLeft: 16}}>
-            <Text style={{color: '#38BDF8', fontWeight: 'bold'}}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      )}
     </>
   );
 }

@@ -467,7 +467,10 @@ export default function HomeScreen() {
             <Text style={styles.cartPriceText} numberOfLines={1} adjustsFontSizeToFit>₹{cartTotalPrice}.00</Text>
           </View>
           <View style={styles.cartCheckoutBtn}>
-            <Text style={styles.cartCheckoutText}>View Cart ➔</Text>
+            <Text style={styles.cartCheckoutText}>View Cart</Text>
+            <Svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 6 }}>
+              <Path d="M5 12h14M12 5l7 7-7 7" />
+            </Svg>
           </View>
         </TouchableOpacity>
       )}
