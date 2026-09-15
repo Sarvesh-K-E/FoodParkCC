@@ -92,10 +92,14 @@ export const getSession = () => sessionData;
 
 let globalCart: any = {};
 let globalMenuCache: any = {};
+let needsBalanceReload = false;
 
 export const getCart = () => globalCart;
 export const updateCart = (newCart: any) => { globalCart = newCart; };
 export const clearCart = () => { globalCart = {}; globalMenuCache = {}; };
+
+export const getNeedsBalanceReload = () => needsBalanceReload;
+export const setNeedsBalanceReload = (val: boolean) => { needsBalanceReload = val; };
 
 const BASE_URL = Platform.OS === 'web' 
   ? 'https://foodparkcc.fpcc.workers.dev'
@@ -194,9 +198,9 @@ export const api = {
   logout: (mobileNo: string) => request('/api/ulogout', { mobno: mobileNo }),
   checkSession: (mobileNo: string, logId: string) => request('/api/chkuserstat', { mobno: mobileNo, logid: logId }),
   getBalance: (regNo: string) => request(`/api/getstudWBalinfo?rno=${regNo}`, null, 'GET'),
-  getMenu: async (sessionNo: string, internalId: string, dateStr: string) => {
+  getMenu: async (sessionNo: string, internalId: string, dateStr: string, forceRefresh: boolean = false) => {
     const cacheKey = `menu_${sessionNo}_${dateStr}`;
-    if (globalMenuCache[cacheKey]) return globalMenuCache[cacheKey];
+    if (!forceRefresh && globalMenuCache[cacheKey]) return globalMenuCache[cacheKey];
     
     const res = await request('/api/GetOptionMenuItems', { DocumentNo: '6', SessionNo: sessionNo, mobno: internalId, flg: '2', oid: '2', odt: dateStr });
     if (res && Array.isArray(res) && res.length > 0) {

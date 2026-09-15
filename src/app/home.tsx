@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput, Platform, Pressable, Linking } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { api, getSession, setSession, getCart, updateCart, clearSessionAsync, getAndClearPromptFlag, setBrightnessPref, getIncludeTodayPref, setIncludeTodayPref } from '../utils/api';
+import { api, getSession, setSession, getCart, updateCart, clearSessionAsync, getAndClearPromptFlag, setBrightnessPref, getIncludeTodayPref, setIncludeTodayPref, getNeedsBalanceReload, setNeedsBalanceReload } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 import CustomSwitch from '../components/CustomSwitch';
 import NetInfo from '@react-native-community/netinfo';
@@ -72,18 +72,22 @@ export default function HomeScreen() {
   useFocusEffect(
     React.useCallback(() => {
       setCart(getCart());
+      if (getNeedsBalanceReload()) {
+        setBalance(null); // Force visual loading state
+        setNeedsBalanceReload(false);
+      }
       fetchBalance();
     }, [fetchBalance])
   );
 
-  const fetchMenu = useCallback(async (sessionNo: string, isPullToRefresh = false) => {
+  const fetchMenu = useCallback(async (sessionNo: string, isPullToRefresh = false, forceRefresh = false) => {
     if (!isPullToRefresh) setLoadingItems(true);
     try {
       const session = getSession();
       const date = new Date();
       const dateStr = `${date.getDate().toString().padStart(2, '0')}-${MONTH_NAMES[date.getMonth()]}-${date.getFullYear()}`;
       
-      const res = await api.getMenu(sessionNo, session.internalId, dateStr);
+      const res = await api.getMenu(sessionNo, session.internalId, dateStr, forceRefresh);
       
       if (res && Array.isArray(res)) {
         setItems(res.map(item => ({
@@ -185,9 +189,11 @@ export default function HomeScreen() {
   const onRefresh = async () => {
     setRefreshing(true);
     setBalance(null);
+    setCart({});
+    updateCart({});
     await Promise.all([
       fetchBalance(),
-      fetchMenu(selectedSession || '1', true)
+      fetchMenu(selectedSession || '1', true, true)
     ]);
     setRefreshing(false);
   };
@@ -197,6 +203,8 @@ export default function HomeScreen() {
     setIsReloading(true);
     setBalance(null);
     setLoadingItems(true); // Instantly clear list to show spinner without waiting for fetch
+    setCart({});
+    updateCart({});
     
     // Yield to the browser so it can paint the loading spinner before we start heavy fetching
     await new Promise(resolve => setTimeout(resolve, 50));
@@ -206,7 +214,7 @@ export default function HomeScreen() {
     
     await Promise.all([
       fetchBalance(),
-      fetchMenu(selectedSession || '1', false),
+      fetchMenu(selectedSession || '1', false, true),
       minDelay
     ]);
     

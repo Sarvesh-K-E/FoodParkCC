@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { api, getSession, getCart, updateCart, clearCart } from '../utils/api';
+import { api, getSession, getCart, updateCart, clearCart, setNeedsBalanceReload } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 
 export default function CartScreen() {
@@ -76,9 +76,36 @@ export default function CartScreen() {
         return;
       }
 
-      const date = new Date();
+      let day = new Date().getDate();
+      let month = new Date().getMonth(); // 0-indexed
+      let year = new Date().getFullYear();
+      let dayOfWeek = new Date().getDay(); // 0-indexed
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const timeRes = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Asia/Kolkata', { signal: controller.signal });
+        clearTimeout(timeoutId);
+        if (timeRes.ok) {
+          const timeData = await timeRes.json();
+          year = timeData.year;
+          month = timeData.month - 1; // timeapi month is 1-indexed (1=Jan, 12=Dec)
+          day = timeData.day;
+          
+          // timeapi dayOfWeek is a string like "Tuesday", we map it to 0-6 index to match dayNames array
+          const daysMap: Record<string, number> = { "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6 };
+          if (timeData.dayOfWeek && daysMap[timeData.dayOfWeek] !== undefined) {
+            dayOfWeek = daysMap[timeData.dayOfWeek];
+          }
+        }
+      } catch (err) {
+        console.log("Internet time fetch failed, falling back to local time", err);
+      }
+
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const dateStr = `${date.getDate().toString().padStart(2, '0')}-${monthNames[date.getMonth()]}-${date.getFullYear()}`;
+      const dateStr = `${day.toString().padStart(2, '0')}-${monthNames[month]}-${year}`;
+      const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
+      const currentDay = dayNames[dayOfWeek];
 
       // Generate Order ID directly (Server will validate stock and balance internally)
       const orderData = await api.getOrderDetails(session.internalId, '1');
@@ -90,9 +117,6 @@ export default function CartScreen() {
       const orderNo = orderData[0].OrderNo || orderData[0].OrderNumber;
 
       // Step 2: Insert Items
-      const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
-      const currentDay = dayNames[new Date().getDay()];
-      
       const insertPayload = {
         items: cartItems.map((c: any) => ({
           productId: `${c.skid}_${c.pid}_${c.tb}`,
@@ -146,6 +170,7 @@ export default function CartScreen() {
         ]).catch(err => console.error("Failed to sync offline history", err));
 
         clearCart();
+        setNeedsBalanceReload(true);
         setSuccess(true);
       } else {
         throw new Error('Payment failed or invalid PIN');
