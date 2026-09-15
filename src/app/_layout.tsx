@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, Text, TouchableOpacity } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { ThemeProvider, useAppTheme } from '../utils/ThemeContext';
 import { loadSessionAsync } from '../utils/api';
 import { PostHogProvider } from 'posthog-react-native';
 
 function InnerLayout() {
   const { isDark } = useAppTheme();
+  const router = useRouter();
 
   // Custom scrollbar for Web
   useEffect(() => {
@@ -34,9 +36,10 @@ function InnerLayout() {
         navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW registration failed:', err));
       }
 
-      // iOS does not support native install prompts, so we must show our own
-      const isIos = () => /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
-      const isIosStandalone = () => ('standalone' in window.navigator) && (window.navigator as any).standalone;
+      // Actively prevent Chrome/Android from showing the native PWA install mini-infobar
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+      });
     }
   }, []);
 
@@ -55,7 +58,20 @@ function InnerLayout() {
           },
           contentStyle: {
             backgroundColor: isDark ? '#121212' : '#F1F5F9',
-          }
+          },
+          headerLeft: (props) => (
+            props.canGoBack ? (
+              <TouchableOpacity 
+                onPress={() => router.back()} 
+                style={{ padding: 8, marginLeft: Platform.OS === 'web' ? 0 : -8, marginRight: 16 }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <Path d="M19 12H5M12 19l-7-7 7-7" />
+                </Svg>
+              </TouchableOpacity>
+            ) : null
+          )
         }}
       >
         <Stack.Screen name="index" options={{ headerShown: false }} />
