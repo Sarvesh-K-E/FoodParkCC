@@ -178,7 +178,8 @@ export default function CartScreen() {
       
     } catch (e: any) {
       console.error(e);
-      alert(e.message || 'An unexpected error occurred during checkout.');
+      const errorMsg = e.message || 'An unexpected error occurred during checkout.';
+      alert(`Error / Timeout!\n\n${errorMsg}\n\nIMPORTANT: Your order might have actually gone through! Please wait a few seconds, go to your Order History, and refresh it. If your order is there, DO NOT place it again.`);
     } finally {
       setLoading(false);
     }

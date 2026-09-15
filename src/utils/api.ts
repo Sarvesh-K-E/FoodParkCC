@@ -146,7 +146,7 @@ const request = async (endpoint: string, data: any = null, method = 'POST', onCa
 
   try {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const id = setTimeout(() => controller.abort(), 60000); // 60 second timeout
     options.signal = controller.signal as any;
 
     const response = await fetch(url, options);
