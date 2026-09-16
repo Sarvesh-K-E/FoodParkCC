@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput, Platform, Pressable, Linking } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput, Platform, Pressable, Linking, Share } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { api, getSession, setSession, getCart, updateCart, clearSessionAsync, getAndClearPromptFlag, setBrightnessPref, getIncludeTodayPref, setIncludeTodayPref, getNeedsBalanceReload, setNeedsBalanceReload } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
@@ -50,13 +50,75 @@ export default function HomeScreen() {
     router.replace('/');
   };
 
+  const handleShare = async () => {
+    const msg = `🍴 FoodParkCC — Faster FoodPark Ordering
+A faster way to order at VIT Chennai's Proodle Foodpark.
+⚡ Fast • 📴 Offline • 📱 Android + PWA
+🔆 Smart QR Brightness • 💰 Daily Limit Tracker
+📱 Download the Android app:
+https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest/download/app-release.apk
+🍎 Use on iPhone / Web:
+http://foodparkcc.pages.dev/
+🔗 GitHub: https://github.com/Sarvesh-K-E/FoodParkCC`;
+
+    if (Platform.OS === 'web') {
+      // On mobile web, the native share sheet works perfectly.
+      const isMobileWeb = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobileWeb && navigator.share) {
+        try {
+          await navigator.share({ text: msg });
+          return;
+        } catch (e: any) {
+          if (e.name === 'AbortError') return;
+        }
+      }
+      
+      // For PC Web (or if mobile share failed), bypass the buggy desktop share APIs and forcefully copy to clipboard.
+      let success = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(msg);
+          success = true;
+        }
+      } catch (err) {}
+
+      if (!success) {
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = msg;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          success = document.execCommand('copy');
+          document.body.removeChild(textArea);
+        } catch (err) {}
+      }
+
+      if (success) {
+        alert("Message copied to clipboard! You can now paste and share it anywhere.");
+      } else {
+        alert("Sharing is not supported on this browser. Please copy the link manually.");
+      }
+    } else {
+      // Native Android / iOS
+      try {
+        await Share.share({ message: msg });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    }
+  };
+
 
 
   const fetchBalance = useCallback(async () => {
     try {
       const session = getSession();
       const res = await api.getBalance(session.regNo);
-      
+
       if (Array.isArray(res) && res.length > 0) {
         setBalance(`₹${res[0].bal}.00`);
         setSession(session.regNo, session.internalId, session.logId, res[0].name, session.pin);
@@ -86,9 +148,9 @@ export default function HomeScreen() {
       const session = getSession();
       const date = new Date();
       const dateStr = `${date.getDate().toString().padStart(2, '0')}-${MONTH_NAMES[date.getMonth()]}-${date.getFullYear()}`;
-      
+
       const res = await api.getMenu(sessionNo, session.internalId, dateStr, forceRefresh);
-      
+
       if (res && Array.isArray(res)) {
         setItems(res.map(item => ({
           ...item,
@@ -205,32 +267,32 @@ export default function HomeScreen() {
     setLoadingItems(true); // Instantly clear list to show spinner without waiting for fetch
     setCart({});
     updateCart({});
-    
+
     // Yield to the browser so it can paint the loading spinner before we start heavy fetching
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     // Add a minimum visual delay so the spinner doesn't flash instantly and look glitchy
     const minDelay = new Promise(resolve => setTimeout(resolve, 400));
-    
+
     await Promise.all([
       fetchBalance(),
       fetchMenu(selectedSession || '1', false, true),
       minDelay
     ]);
-    
+
     setIsReloading(false);
   };
 
   const addToCart = (item: any) => {
     const newCart = { ...cart };
     const current = newCart[item.pid] || { ...item, quantity: 0 };
-    
+
     // Honor the frontend limit if explicitly set by backend (below 999)
     if (item.stockQty !== undefined && item.stockQty < 999 && current.quantity >= item.stockQty) {
       alert(`Limit reached: You cannot add more than ${item.stockQty} of this item.`);
       return;
     }
-    
+
     newCart[item.pid] = { ...current, quantity: current.quantity + 1 };
     setCart(newCart);
     updateCart(newCart);
@@ -240,7 +302,7 @@ export default function HomeScreen() {
     const newCart = { ...cart };
     const current = newCart[item.pid];
     if (!current || current.quantity === 0) return;
-    
+
     if (current.quantity === 1) {
       delete newCart[item.pid];
     } else {
@@ -277,9 +339,9 @@ export default function HomeScreen() {
           <Text style={styles.dailyAllowancePrefText}>{includeToday ? 'Including Today' : 'Excluding Today'}</Text>
         </TouchableOpacity>
       </View>
-      
+
       <View style={styles.actionsRow}>
-        <View style={{flexDirection: 'row', alignItems: 'center'}}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <TouchableOpacity style={styles.historyBtn} onPress={() => router.push('/history')}>
             <Text style={styles.historyBtnText}>Orders</Text>
           </TouchableOpacity>
@@ -301,8 +363,8 @@ export default function HomeScreen() {
 
       <View style={styles.tabsContainer}>
         {SESSIONS.map(session => (
-          <TouchableOpacity 
-            key={session.id} 
+          <TouchableOpacity
+            key={session.id}
             style={[styles.tab, selectedSession === session.id && styles.activeTab]}
             onPress={() => {
               if (selectedSession !== session.id) {
@@ -344,8 +406,8 @@ export default function HomeScreen() {
                 <Text style={styles.qtyText}>-</Text>
               </TouchableOpacity>
               <Text style={styles.qtyValue}>{qty}</Text>
-              <TouchableOpacity 
-                style={styles.qtyBtn} 
+              <TouchableOpacity
+                style={styles.qtyBtn}
                 onPress={() => addToCart(item)}
               >
                 <Text style={styles.qtyText}>+</Text>
@@ -382,7 +444,7 @@ export default function HomeScreen() {
         </View>
       )}
       {renderHeader()}
-      
+
       {isOffline ? (
         <View style={styles.offlineStateContainer}>
           <Ionicons name="wifi-outline" size={64} color={isDark ? '#475569' : '#94A3B8'} />
@@ -393,9 +455,9 @@ export default function HomeScreen() {
       ) : (
         <>
           <View style={styles.searchContainer}>
-            <TextInput 
-              style={styles.searchInput} 
-              placeholder="Search menu" 
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search menu"
               placeholderTextColor={isDark ? '#94A3B8' : '#64748B'}
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -418,37 +480,54 @@ export default function HomeScreen() {
               ListFooterComponent={
                 <View style={styles.footerContainer}>
                   <View style={styles.footerDivider} />
-                  <View style={styles.linksContainer}>
-                    <TouchableOpacity 
-                      style={styles.linkBtn}
-                      onPress={() => Linking.openURL('https://github.com/Sarvesh-K-E/FoodParkCC')}
-                    >
-                      <Svg viewBox="0 0 24 24" width="16" height="16" fill={isDark ? '#F8FAFC' : '#0F172A'}>
-                        <Path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                      </Svg>
-                      <Text style={styles.linkText}>GitHub</Text>
-                    </TouchableOpacity>
+                  <View style={[styles.linksContainer, { flexDirection: 'column', alignItems: 'center' }]}>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        style={styles.linkBtn}
+                        onPress={() => Linking.openURL('https://github.com/Sarvesh-K-E/FoodParkCC')}
+                      >
+                        <Svg viewBox="0 0 24 24" width="16" height="16" fill={isDark ? '#F8FAFC' : '#0F172A'}>
+                          <Path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                        </Svg>
+                        <Text style={styles.linkText}>GitHub</Text>
+                      </TouchableOpacity>
 
-                    <TouchableOpacity 
-                      style={styles.linkBtn}
-                      onPress={() => Linking.openURL('http://foodparkcc.pages.dev/')}
-                    >
-                      <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <Circle cx="12" cy="12" r="10" />
-                        <Path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </Svg>
-                      <Text style={styles.linkText}>Website</Text>
-                    </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.linkBtn}
+                        onPress={handleShare}
+                      >
+                        <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <Circle cx="18" cy="5" r="3" />
+                          <Circle cx="6" cy="12" r="3" />
+                          <Circle cx="18" cy="19" r="3" />
+                          <Path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" />
+                        </Svg>
+                        <Text style={styles.linkText}>Share</Text>
+                      </TouchableOpacity>
+                    </View>
 
-                    <TouchableOpacity 
-                      style={styles.linkBtn}
-                      onPress={() => Linking.openURL('https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest/download/app-release.apk')}
-                    >
-                      <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                      </Svg>
-                      <Text style={styles.linkText}>Download APK</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <TouchableOpacity
+                        style={styles.linkBtn}
+                        onPress={() => Linking.openURL('http://foodparkcc.pages.dev/')}
+                      >
+                        <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <Circle cx="12" cy="12" r="10" />
+                          <Path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </Svg>
+                        <Text style={styles.linkText}>Website</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.linkBtn}
+                        onPress={() => Linking.openURL('https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest/download/app-release.apk')}
+                      >
+                        <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                        </Svg>
+                        <Text style={styles.linkText}>Download APK</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               }
@@ -458,8 +537,8 @@ export default function HomeScreen() {
       )}
 
       {cartTotalItems > 0 && (
-        <TouchableOpacity 
-          style={styles.cartBar} 
+        <TouchableOpacity
+          style={styles.cartBar}
           activeOpacity={1}
           onPress={() => router.push('/cart')}
         >
@@ -487,10 +566,10 @@ export default function HomeScreen() {
               Platform Limitation:{'\n'}
               This feature only works when installed as an app (APK/IPA). It will not work when opened in a web browser.
             </Text>
-            
+
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20 }}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: isDark ? '#334155' : '#E2E8F0', flex: 1, marginRight: 8 }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: isDark ? '#334155' : '#E2E8F0', flex: 1, marginRight: 8 }]}
                 onPress={() => {
                   setBrightnessPref(false);
                   setShowBrightnessPrompt(false);
@@ -498,8 +577,8 @@ export default function HomeScreen() {
               >
                 <Text style={[styles.modalBtnText, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>No, Thanks</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { flex: 1, marginLeft: 8 }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { flex: 1, marginLeft: 8 }]}
                 onPress={async () => {
                   setBrightnessPref(true);
                   setShowBrightnessPrompt(false);
@@ -518,10 +597,10 @@ export default function HomeScreen() {
             <Text style={styles.modalDesc}>
               Do you want to include today in the remaining days calculation?
             </Text>
-            
+
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20 }}>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { backgroundColor: isDark ? '#334155' : '#E2E8F0', flex: 1, marginRight: 8, opacity: !includeToday ? 0.5 : 1 }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: isDark ? '#334155' : '#E2E8F0', flex: 1, marginRight: 8, opacity: !includeToday ? 0.5 : 1 }]}
                 onPress={() => {
                   setIncludeTodayPref(false);
                   setIncludeToday(false);
@@ -531,8 +610,8 @@ export default function HomeScreen() {
               >
                 <Text style={[styles.modalBtnText, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>Exclude Today</Text>
               </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.modalBtn, { flex: 1, marginLeft: 8, opacity: includeToday ? 0.5 : 1 }]} 
+              <TouchableOpacity
+                style={[styles.modalBtn, { flex: 1, marginLeft: 8, opacity: includeToday ? 0.5 : 1 }]}
                 onPress={() => {
                   setIncludeTodayPref(true);
                   setIncludeToday(true);
