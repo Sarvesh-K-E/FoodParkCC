@@ -96,10 +96,11 @@ let needsBalanceReload = false;
 
 export const getCart = () => globalCart;
 export const updateCart = (newCart: any) => { globalCart = newCart; };
-export const clearCart = () => { globalCart = {}; globalMenuCache = {}; };
 
 export const getNeedsBalanceReload = () => needsBalanceReload;
 export const setNeedsBalanceReload = (val: boolean) => { needsBalanceReload = val; };
+export const clearCart = () => { globalCart = {}; globalMenuCache = {}; };
+
 
 const BASE_URL = Platform.OS === 'web' 
   ? 'https://foodparkcc.fpcc.workers.dev'
@@ -197,7 +198,7 @@ export const api = {
   getQRData: (orderId: string, onCachedData?: (data: any) => void) => request(`/api/orderQR?ordno=${orderId}`, null, 'GET', onCachedData),
   logout: (mobileNo: string) => request('/api/ulogout', { mobno: mobileNo }),
   checkSession: (mobileNo: string, logId: string) => request('/api/chkuserstat', { mobno: mobileNo, logid: logId }),
-  getBalance: (regNo: string) => request(`/api/getstudWBalinfo?rno=${regNo}`, null, 'GET'),
+  getBalance: (regNo: string, onCachedData?: (data: any) => void) => request(`/api/getstudWBalinfo?rno=${regNo}`, null, 'GET', onCachedData),
   getMenu: async (sessionNo: string, internalId: string, dateStr: string, forceRefresh: boolean = false) => {
     const cacheKey = `menu_${sessionNo}_${dateStr}`;
     if (!forceRefresh && globalMenuCache[cacheKey]) return globalMenuCache[cacheKey];

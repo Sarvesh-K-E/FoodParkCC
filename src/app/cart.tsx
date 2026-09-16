@@ -107,47 +107,68 @@ export default function CartScreen() {
       const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
       const currentDay = dayNames[dayOfWeek];
 
-      // Generate Order ID directly (Server will validate stock and balance internally)
-      const orderData = await api.getOrderDetails(session.internalId, '1');
-      
-      // Validate Order ID
-      if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
-        throw new Error('Failed to generate order ID');
-      }
-      const orderNo = orderData[0].OrderNo || orderData[0].OrderNumber;
+      let orderNo = '';
+      let insertSuccess = false;
 
-      // Step 2: Insert Items
-      const insertPayload = {
-        items: cartItems.map((c: any) => ({
-          productId: `${c.skid}_${c.pid}_${c.tb}`,
-          quantity: c.quantity,
-          ides: c.ides,
-          rt: c.rt,
-          amt: c.rt * c.quantity,
-          tp: c.type || "P",
-          odt: dateStr,
-          odtdes: currentDay, // Day of the week is sent as odtdes
-          tb: c.tb,
-          pid: c.pid,
-          dtstr: dateStr,
-          ldes: c.ldes || "",
-          cal: "",
-          sname: c.sname,
-          skid: c.skid?.toString(),
-          flag: 1,
-          optcls: ""
-        })),
-        OrderNumber: orderNo,
-        TableNo: "1",
-        ItemTotal: cartTotalPrice.toString() + ".00",
-        OutLetId: "2",
-        MobileNo: session.internalId,
-        RefNo: ""
-      };
-      
-      const insertRes = await api.placeOrder(insertPayload);
-      if (insertRes == 0 || insertRes === '0') {
-        throw new Error('Failed to insert items into order');
+      // Retry loop to handle Proodle database race conditions and transient failures
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        // Generate Order ID directly
+        const orderData = await api.getOrderDetails(session.internalId, '1');
+        
+        // Validate Order ID
+        if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
+          throw new Error('Failed to generate order ID');
+        }
+        orderNo = orderData[0].OrderNo || orderData[0].OrderNumber;
+
+        // Artificial delay (200ms) to give Proodle's database time to unlock the new Order ID
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Step 2: Insert Items
+        const insertPayload = {
+          items: cartItems.map((c: any) => ({
+            productId: `${c.skid}_${c.pid}_${c.tb}`,
+            quantity: c.quantity,
+            ides: c.ides,
+            rt: c.rt,
+            amt: c.rt * c.quantity,
+            tp: c.type || "P",
+            odt: dateStr,
+            odtdes: currentDay, // Day of the week is sent as odtdes
+            tb: c.tb,
+            pid: c.pid,
+            dtstr: dateStr,
+            ldes: c.ldes || "",
+            cal: "",
+            sname: c.sname,
+            skid: c.skid?.toString(),
+            flag: 1,
+            optcls: ""
+          })),
+          OrderNumber: orderNo,
+          TableNo: "1",
+          ItemTotal: cartTotalPrice.toString() + ".00",
+          OutLetId: "2",
+          MobileNo: session.internalId,
+          RefNo: ""
+        };
+        
+        const insertRes = await api.placeOrder(insertPayload);
+        
+        // If it successfully inserted, break out of the retry loop
+        if (insertRes != 0 && insertRes !== '0') {
+          insertSuccess = true;
+          break;
+        }
+
+        // If it failed (returned 0), wait 1000ms before generating a new ID and trying again
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      if (!insertSuccess) {
+        throw new Error('Failed to insert items into order after multiple attempts. The item might be out of stock or the stall might be closed.');
       }
 
       // Step 3: OnlineWPayment
@@ -166,7 +187,8 @@ export default function CartScreen() {
         // Fire and forget cache syncing in the background for maximum checkout speed
         Promise.allSettled([
           api.getOrderHistory(session.internalId),
-          api.getQRData(orderNo)
+          api.getQRData(orderNo),
+          api.getBalance(session.regNo)
         ]).catch(err => console.error("Failed to sync offline history", err));
 
         clearCart();

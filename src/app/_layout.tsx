@@ -1,17 +1,28 @@
 import { useEffect, useState } from 'react';
 import { useFonts } from 'expo-font';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, View, Text, TouchableOpacity } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { ThemeProvider, useAppTheme } from '../utils/ThemeContext';
-import { loadSessionAsync } from '../utils/api';
+import { loadSessionAsync, getSession } from '../utils/api';
 import { PostHogProvider } from 'posthog-react-native';
 
 function InnerLayout() {
   const { isDark } = useAppTheme();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Global Authentication Guard
+  useEffect(() => {
+    const session = getSession();
+    // If the user has no internalId, they are not logged in.
+    // Redirect them to the login screen (root path) if they try to access any other page.
+    if (!session.internalId && pathname !== '/') {
+      router.replace('/');
+    }
+  }, [pathname]);
 
   // Custom scrollbar for Web
   useEffect(() => {

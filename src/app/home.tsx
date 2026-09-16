@@ -73,7 +73,7 @@ export default function HomeScreen() {
     React.useCallback(() => {
       setCart(getCart());
       if (getNeedsBalanceReload()) {
-        setBalance(null); // Force visual loading state
+        setBalance(null); // Briefly clear balance so old one isn't shown
         setNeedsBalanceReload(false);
       }
       fetchBalance();
@@ -460,6 +460,7 @@ export default function HomeScreen() {
       {cartTotalItems > 0 && (
         <TouchableOpacity 
           style={styles.cartBar} 
+          activeOpacity={1}
           onPress={() => router.push('/cart')}
         >
           <View style={{ flex: 1, paddingRight: 12 }}>
