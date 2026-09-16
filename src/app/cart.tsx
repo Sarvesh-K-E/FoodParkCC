@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { api, getSession, getCart, updateCart, clearCart, setNeedsBalanceReload } from '../utils/api';
+import { api, getSession, getCart, updateCart, clearCart, setNeedsBalanceReload, getInternetDate } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 
 export default function CartScreen() {
@@ -76,82 +76,63 @@ export default function CartScreen() {
         return;
       }
 
-      let day = new Date().getDate();
-      let month = new Date().getMonth(); // 0-indexed
-      let year = new Date().getFullYear();
-      let dayOfWeek = new Date().getDay(); // 0-indexed
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3500);
-        const timeRes = await fetch('https://timeapi.io/api/Time/current/zone?timeZone=Asia/Kolkata', { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (timeRes.ok) {
-          const timeData = await timeRes.json();
-          year = timeData.year;
-          month = timeData.month - 1; // timeapi month is 1-indexed (1=Jan, 12=Dec)
-          day = timeData.day;
-          
-          // timeapi dayOfWeek is a string like "Tuesday", we map it to 0-6 index to match dayNames array
-          const daysMap: Record<string, number> = { "Sunday": 0, "Monday": 1, "Tuesday": 2, "Wednesday": 3, "Thursday": 4, "Friday": 5, "Saturday": 6 };
-          if (timeData.dayOfWeek && daysMap[timeData.dayOfWeek] !== undefined) {
-            dayOfWeek = daysMap[timeData.dayOfWeek];
-          }
-        }
-      } catch (err) {
-        console.log("Internet time fetch failed, falling back to local time", err);
-      }
+      const date = getInternetDate();
+      let day = date.getDate();
+      let month = date.getMonth(); // 0-indexed
+      let year = date.getFullYear();
+      let dayOfWeek = date.getDay(); // 0-indexed
 
       const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       const dateStr = `${day.toString().padStart(2, '0')}-${monthNames[month]}-${year}`;
       const dayNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
       const currentDay = dayNames[dayOfWeek];
 
-      let orderNo = '';
+      // Step 1: Generate Order ID directly (Server will validate stock and balance internally)
+      const orderData = await api.getOrderDetails(session.internalId, '1');
+      
+      // Validate Order ID
+      if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
+        throw new Error('Failed to generate order ID');
+      }
+      const orderNo = orderData[0].OrderNo || orderData[0].OrderNumber;
+
+      // Step 2: Insert Items Payload
+      const insertPayload = {
+        items: cartItems.map((c: any) => ({
+          productId: `${c.skid}_${c.pid}_${c.tb}`,
+          quantity: c.quantity,
+          ides: c.ides,
+          rt: c.rt,
+          amt: c.rt * c.quantity,
+          tp: c.type || "P",
+          odt: dateStr,
+          odtdes: currentDay, // Day of the week is sent as odtdes
+          tb: c.tb,
+          pid: c.pid,
+          dtstr: dateStr,
+          ldes: c.ldes || "",
+          cal: "",
+          sname: c.sname,
+          skid: c.skid?.toString(),
+          flag: 1,
+          optcls: ""
+        })),
+        OrderNumber: orderNo,
+        TableNo: "1",
+        ItemTotal: cartTotalPrice.toString() + ".00",
+        OutLetId: "2",
+        MobileNo: session.internalId,
+        RefNo: ""
+      };
+
       let insertSuccess = false;
 
-      // Retry loop to handle Proodle database race conditions and transient failures
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        // Generate Order ID directly
-        const orderData = await api.getOrderDetails(session.internalId, '1');
-        
-        // Validate Order ID
-        if (!orderData || !Array.isArray(orderData) || orderData.length === 0) {
-          throw new Error('Failed to generate order ID');
-        }
-        orderNo = orderData[0].OrderNo || orderData[0].OrderNumber;
-
-        // Artificial delay (200ms) to give Proodle's database time to unlock the new Order ID
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Step 2: Insert Items
-        const insertPayload = {
-          items: cartItems.map((c: any) => ({
-            productId: `${c.skid}_${c.pid}_${c.tb}`,
-            quantity: c.quantity,
-            ides: c.ides,
-            rt: c.rt,
-            amt: c.rt * c.quantity,
-            tp: c.type || "P",
-            odt: dateStr,
-            odtdes: currentDay, // Day of the week is sent as odtdes
-            tb: c.tb,
-            pid: c.pid,
-            dtstr: dateStr,
-            ldes: c.ldes || "",
-            cal: "",
-            sname: c.sname,
-            skid: c.skid?.toString(),
-            flag: 1,
-            optcls: ""
-          })),
-          OrderNumber: orderNo,
-          TableNo: "1",
-          ItemTotal: cartTotalPrice.toString() + ".00",
-          OutLetId: "2",
-          MobileNo: session.internalId,
-          RefNo: ""
-        };
+      // Retry loop to handle Proodle database race conditions
+      // Since Order ID generation and item insertion happen rapidly, we retry the insertion on the same Order ID
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        // Artificial delay to give Proodle's database time to unlock the new Order ID (250ms, then 1000ms, then 2000ms)
+        const delayMs = attempt === 1 ? 250 : (attempt === 2 ? 1000 : 2000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
         
         const insertRes = await api.placeOrder(insertPayload);
         
@@ -161,9 +142,8 @@ export default function CartScreen() {
           break;
         }
 
-        // If it failed (returned 0), wait 1000ms before generating a new ID and trying again
-        if (attempt < 3) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
+        if (attempt < 4) {
+          console.warn(`[Checkout] Attempt ${attempt} failed to insert. Retrying in ${delayMs === 250 ? 1000 : 2000}ms...`);
         }
       }
 

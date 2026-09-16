@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput, Platform, Pressable, Linking, Share } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { api, getSession, setSession, getCart, updateCart, clearSessionAsync, getAndClearPromptFlag, setBrightnessPref, getIncludeTodayPref, setIncludeTodayPref, getNeedsBalanceReload, setNeedsBalanceReload } from '../utils/api';
+import { api, getSession, setSession, getCart, updateCart, clearSessionAsync, getAndClearPromptFlag, setBrightnessPref, getIncludeTodayPref, setIncludeTodayPref, getNeedsBalanceReload, setNeedsBalanceReload, setTimeOffset, getInternetDate } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 import CustomSwitch from '../components/CustomSwitch';
 import NetInfo from '@react-native-community/netinfo';
@@ -114,6 +114,26 @@ http://foodparkcc.pages.dev/
 
 
 
+  // Fetch internet time offset in background on mount
+  useEffect(() => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    fetch('https://timeapi.io/api/Time/current/zone?timeZone=Asia/Kolkata', { signal: controller.signal })
+      .then(res => res.json())
+      .then(data => {
+        clearTimeout(timeoutId);
+        const internetStr = `${data.year}-${data.month.toString().padStart(2, '0')}-${data.day.toString().padStart(2, '0')}T${data.hour.toString().padStart(2, '0')}:${data.minute.toString().padStart(2, '0')}:${data.seconds.toString().padStart(2, '0')}+05:30`;
+        const internetTime = new Date(internetStr).getTime();
+        const localTime = Date.now();
+        setTimeOffset(internetTime - localTime);
+      })
+      .catch(() => {
+        clearTimeout(timeoutId);
+        console.log('Failed to fetch background internet time, falling back to local time natively.');
+      });
+  }, []);
+
   const fetchBalance = useCallback(async () => {
     try {
       const session = getSession();
@@ -146,7 +166,7 @@ http://foodparkcc.pages.dev/
     if (!isPullToRefresh) setLoadingItems(true);
     try {
       const session = getSession();
-      const date = new Date();
+      const date = getInternetDate();
       const dateStr = `${date.getDate().toString().padStart(2, '0')}-${MONTH_NAMES[date.getMonth()]}-${date.getFullYear()}`;
 
       const res = await api.getMenu(sessionNo, session.internalId, dateStr, forceRefresh);

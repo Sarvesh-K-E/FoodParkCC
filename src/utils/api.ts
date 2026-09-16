@@ -101,6 +101,14 @@ export const getNeedsBalanceReload = () => needsBalanceReload;
 export const setNeedsBalanceReload = (val: boolean) => { needsBalanceReload = val; };
 export const clearCart = () => { globalCart = {}; globalMenuCache = {}; };
 
+let globalTimeOffset = 0;
+export const setTimeOffset = (offset: number) => { globalTimeOffset = offset; };
+export const getInternetDate = () => {
+  const d = new Date(Date.now() + globalTimeOffset);
+  const utc = d.getTime() + (d.getTimezoneOffset() * 60000);
+  return new Date(utc + (330 * 60000)); // Force IST (+05:30)
+};
+
 
 const BASE_URL = Platform.OS === 'web' 
   ? 'https://foodparkcc.fpcc.workers.dev'
