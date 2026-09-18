@@ -33,6 +33,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Inject Version Code
+        run: |
+          jq '.expo.android.versionCode = ${{ github.run_number }}' app.json > temp.json && mv temp.json app.json
+
       - name: Expo Prebuild
         run: npx expo prebuild --platform android --clean
 
@@ -61,4 +65,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="update-${{ github.run_number }}"
-          gh release create $TAG_NAME android/app/build/outputs/apk/release/app-release.apk --title "Update #${{ github.run_number }}" --generate-notes
+          gh release create $TAG_NAME android/app/build/outputs/apk/release/app-release.apk --title "Update #${{ github.run_number }}" --notes "Automated Android APK build for this specific update of FoodParkCC."
