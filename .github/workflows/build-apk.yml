@@ -63,7 +63,23 @@ jobs:
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           BUILD_TOOLS_DIR=$(ls -d $ANDROID_HOME/build-tools/* | tail -1)
-          $BUILD_TOOLS_DIR/apksigner sign --ks $GITHUB_WORKSPACE/release.keystore --ks-pass "pass:$KEYSTORE_PASSWORD" --key-pass "pass:$KEY_PASSWORD" --ks-key-alias "$KEY_ALIAS" android/app/build/outputs/apk/release/app-release.apk
+          
+          # Zipalign the APK first (required for perfect v2/v3 signing)
+          $BUILD_TOOLS_DIR/zipalign -v 4 android/app/build/outputs/apk/release/app-release.apk android/app/build/outputs/apk/release/app-release-aligned.apk
+          
+          # Sign the aligned APK explicitly enforcing all 3 signature blocks
+          $BUILD_TOOLS_DIR/apksigner sign \
+            --ks $GITHUB_WORKSPACE/release.keystore \
+            --ks-pass "pass:$KEYSTORE_PASSWORD" \
+            --key-pass "pass:$KEY_PASSWORD" \
+            --ks-key-alias "$KEY_ALIAS" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            android/app/build/outputs/apk/release/app-release-aligned.apk
+            
+          # Replace original with aligned & signed version
+          mv android/app/build/outputs/apk/release/app-release-aligned.apk android/app/build/outputs/apk/release/app-release.apk
 
       - name: Publish Release
         env:
