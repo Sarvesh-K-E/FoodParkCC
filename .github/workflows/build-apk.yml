@@ -39,19 +39,26 @@ jobs:
       - name: Configure Gradle Memory
         run: sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m/' android/gradle.properties
 
+      - name: Decode Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/release.keystore
+
       - name: Build Release APK
         env:
           NODE_OPTIONS: "--max-old-space-size=3072"
         run: |
           cd android
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=release.keystore \
+            -Pandroid.injected.signing.store.password=${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            -Pandroid.injected.signing.key.alias=${{ secrets.ANDROID_KEY_ALIAS }} \
+            -Pandroid.injected.signing.key.password=${{ secrets.ANDROID_KEY_PASSWORD }}
 
-      - name: Publish Latest Release
+      - name: Publish Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Delete existing 'latest' release and tag if they exist
-          gh release delete latest --cleanup-tag -y || true
-          
-          # Create new 'latest' release and upload the APK
-          gh release create latest android/app/build/outputs/apk/release/app-release.apk --title "Latest APK" --notes "Download the latest Android APK here."
+          TAG_NAME="update-${{ github.run_number }}"
+          gh release create $TAG_NAME android/app/build/outputs/apk/release/app-release.apk --title "Update #${{ github.run_number }}" --generate-notes
