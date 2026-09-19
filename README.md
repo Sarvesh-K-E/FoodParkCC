@@ -3,7 +3,7 @@
   <h1>FoodParkCC</h1>
   <p>A fast, modern, and private third-party client tailored for VIT Chennai's Proodle Foodpark.</p>
 
-  [![Download APK](https://img.shields.io/badge/-Download%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest/download/app-release.apk)
+  [![Download APK](https://img.shields.io/badge/-Download%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest)
   &nbsp;&nbsp;
   [![Open Website](https://img.shields.io/badge/-Open%20Website-0969DA?style=for-the-badge&logo=googlechrome&logoColor=white)](http://foodparkcc.pages.dev/)
 </div>
