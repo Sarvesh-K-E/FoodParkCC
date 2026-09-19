@@ -90,4 +90,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG_NAME="update-${{ github.run_number }}"
-          gh release create $TAG_NAME android/app/build/outputs/apk/release/app-release.apk --title "FoodParkCC Build #${{ github.run_number }}" --notes ""
+          RELEASE_DATE=$(TZ="Asia/Kolkata" date +'%B %d, %Y %H:%M:%S IST')
+          NOTES="## ⬇️ Scroll down to the **Assets** section below and tap on **\`app-release.apk\`** to download the newest release."
+          gh release create $TAG_NAME android/app/build/outputs/apk/release/app-release.apk --title "FoodParkCC APK - $RELEASE_DATE" --notes "$NOTES"

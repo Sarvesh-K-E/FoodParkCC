@@ -56,7 +56,7 @@ A faster way to order at VIT Chennai's Proodle Foodpark.
 ⚡ Fast • 📴 Offline • 📱 Android + PWA
 🔆 Smart QR Brightness • 💰 Daily Limit Tracker
 📱 Download the Android app:
-https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest/download/app-release.apk
+https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest
 🍎 Use on iPhone / Web:
 http://foodparkcc.pages.dev/
 🔗 GitHub: https://github.com/Sarvesh-K-E/FoodParkCC`;
@@ -540,7 +540,7 @@ http://foodparkcc.pages.dev/
 
                       <TouchableOpacity
                         style={styles.linkBtn}
-                        onPress={() => Linking.openURL('https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest/download/app-release.apk')}
+                        onPress={() => Linking.openURL('https://github.com/Sarvesh-K-E/FoodParkCC/releases/latest')}
                       >
                         <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
