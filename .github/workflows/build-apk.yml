@@ -40,6 +40,12 @@ jobs:
       - name: Expo Prebuild
         run: npx expo prebuild --platform android --clean
 
+      - name: Configure Build Optimizations (Shrink APK)
+        run: |
+          echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a" >> android/gradle.properties
+          echo "android.enableMinifyInReleaseBuilds=true" >> android/gradle.properties
+          echo "android.enableShrinkResourcesInReleaseBuilds=true" >> android/gradle.properties
+
       - name: Configure Gradle Memory
         run: sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m/' android/gradle.properties
 
