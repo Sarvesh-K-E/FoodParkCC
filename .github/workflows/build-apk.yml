@@ -42,7 +42,7 @@ jobs:
 
       - name: Configure Build Optimizations (Shrink APK)
         run: |
-          echo "reactNativeArchitectures=armeabi-v7a,arm64-v8a" >> android/gradle.properties
+          sed -i 's/defaultConfig {/defaultConfig {\n        ndk { abiFilters "armeabi-v7a", "arm64-v8a" }/' android/app/build.gradle
 
       - name: Configure Gradle Memory
         run: sed -i 's/^org.gradle.jvmargs=.*/org.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=1024m/' android/gradle.properties
