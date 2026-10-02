@@ -7,6 +7,7 @@ import { api, getSession, getBrightnessPref, setBrightnessPref } from '../utils/
 import { useAppTheme } from '../utils/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import * as FileSystem from 'expo-file-system';
+import * as WebBrowser from 'expo-web-browser';
 
 let isSharingLock = false;
 
@@ -71,18 +72,9 @@ export default function HistoryScreen() {
     } else {
       try {
         if (Platform.OS === 'android') {
-          // Write the base64 string to a local file in the cache directory
-          const fileUri = FileSystem.cacheDirectory + `order_${activeQR.current}.png`;
-          const base64Data = selectedQR.replace(/^data:image\/png;base64,/, '');
-          await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
-          
-          // Generate a content:// URI using the internal FileProvider
-          const contentUri = await FileSystem.getContentUriAsync(fileUri);
-          
-          await Share.share({ 
-            message: msg,
-            url: contentUri
-          });
+          // Native Android sharing of Base64 is limited without extra native modules.
+          // Fallback to our Web Bridge: opens an in-app browser to trigger the Web Share API!
+          await WebBrowser.openBrowserAsync(`http://foodparkcc.pages.dev/share-bridge?orderId=${activeQR.current}`);
         } else {
           await Share.share({ 
             message: msg,
