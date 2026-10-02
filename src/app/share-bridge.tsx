@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import Svg, { Path } from 'react-native-svg';
 import { api } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 
@@ -14,7 +13,7 @@ export default function ShareBridgeScreen() {
 
   useEffect(() => {
     if (!orderId) {
-      setError('No Order ID provided');
+      setError('Invalid Order');
       setLoading(false);
       return;
     }
@@ -31,7 +30,7 @@ export default function ShareBridgeScreen() {
         const rawB64 = await api.getQRData(orderId as string, handleData);
         if (rawB64) handleData(rawB64);
       } catch (err) {
-        setError('Failed to load QR Code');
+        setError('Failed');
         setLoading(false);
       }
     };
@@ -53,39 +52,38 @@ export default function ShareBridgeScreen() {
         text: msg,
         files: [file]
       });
+      
+      // Auto-close the WebBrowser by redirecting back to the app's deep link!
+      window.location.href = 'foodparkcc://';
     } catch (e: any) {
       if (e.name !== 'AbortError') {
         try {
           await navigator.share({ text: msg });
+          window.location.href = 'foodparkcc://';
         } catch (err) {}
+      } else {
+        // User cancelled share, go back to app
+        window.location.href = 'foodparkcc://';
       }
     }
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: isDark ? '#121212' : '#F1F5F9' }]}>
-      <View style={[styles.card, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF' }]}>
-        <Text style={[styles.title, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
-          Share Order #{orderId}
+    <TouchableOpacity 
+      activeOpacity={1} 
+      style={[styles.container, { backgroundColor: isDark ? '#121212' : '#F1F5F9' }]} 
+      onPress={handleShare}
+    >
+      {loading ? (
+        <ActivityIndicator size="large" color="#38BDF8" />
+      ) : error ? (
+        <Text style={{ color: '#EF4444' }}>{error}</Text>
+      ) : (
+        <Text style={[styles.text, { color: isDark ? '#F8FAFC' : '#0F172A' }]}>
+          Tap anywhere to complete share...
         </Text>
-        
-        {loading ? (
-          <ActivityIndicator size="large" color="#38BDF8" style={{ marginVertical: 30 }} />
-        ) : error ? (
-          <Text style={{ color: '#EF4444', marginVertical: 20 }}>{error}</Text>
-        ) : (
-          <>
-            <Image source={{ uri: qrBase64! }} style={styles.qrImage} resizeMode="contain" />
-            <TouchableOpacity style={styles.button} onPress={handleShare}>
-              <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <Path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13" />
-              </Svg>
-              <Text style={styles.buttonText}>Tap to Open Share Menu</Text>
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
-    </View>
+      )}
+    </TouchableOpacity>
   );
 }
 
@@ -94,45 +92,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
-  },
-  card: {
     width: '100%',
-    maxWidth: 400,
-    borderRadius: 24,
-    padding: 30,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 10,
+    height: '100%',
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 20,
-  },
-  qrImage: {
-    width: 250,
-    height: 250,
-    borderRadius: 16,
-    marginBottom: 24,
-  },
-  button: {
-    backgroundColor: '#0EA5E9',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 16,
-    width: '100%',
-    justifyContent: 'center',
-  },
-  buttonText: {
-    color: '#FFFFFF',
+  text: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 10,
+    fontWeight: '600',
+    opacity: 0.5
   }
 });
