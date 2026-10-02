@@ -20,6 +20,8 @@ const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Se
 
 
 
+let isSharingLock = false;
+
 export default function HomeScreen() {
   const { isDark, toggleTheme } = useAppTheme();
   const styles = getStyles(isDark);
@@ -51,6 +53,9 @@ export default function HomeScreen() {
   };
 
   const handleShare = async () => {
+    if (isSharingLock) return;
+    isSharingLock = true;
+    setTimeout(() => { isSharingLock = false; }, 1000);
     const msg = `🍴 FoodParkCC — Faster FoodPark Ordering
 A faster way to order at VIT Chennai's Proodle Foodpark.
 ⚡ Fast • 📴 Offline • 📱 Android + PWA
@@ -270,6 +275,7 @@ http://foodparkcc.pages.dev/
 
   const onRefresh = async () => {
     setRefreshing(true);
+    setSearchQuery('');
     setBalance(null);
     setCart({});
     updateCart({});
@@ -283,6 +289,7 @@ http://foodparkcc.pages.dev/
   const handleReload = async () => {
     if (isReloading) return;
     setIsReloading(true);
+    setSearchQuery('');
     setBalance(null);
     setLoadingItems(true); // Instantly clear list to show spinner without waiting for fetch
     setCart({});
@@ -448,7 +455,7 @@ http://foodparkcc.pages.dev/
     if (loadingItems) return <ActivityIndicator color="#0EA5E9" size="large" style={{ marginTop: 40 }} />;
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>Session not started</Text>
+        <Text style={styles.emptyText}>Session not started/Not Available</Text>
       </View>
     );
   };
@@ -493,7 +500,7 @@ http://foodparkcc.pages.dev/
               renderItem={renderItem}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
-                  <Text style={styles.emptyText}>Session not started</Text>
+                  <Text style={styles.emptyText}>Session not started/Not Available</Text>
                 </View>
               }
               contentContainerStyle={styles.listContent}
