@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Image, Platform, Modal, AppState, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, Image, Platform, Modal, AppState, Pressable, ScrollView, Share } from 'react-native';
 import { Stack } from 'expo-router';
 import * as Brightness from 'expo-brightness';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { api, getSession, getBrightnessPref, setBrightnessPref } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,64 @@ export default function HistoryScreen() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSynced, setIsSynced] = useState(false);
 
+  const handleShareQR = async () => {
+    if (!selectedQR || !activeQR.current) return;
+    
+    const msg = `Here's my FoodPark QR Code for Order #${activeQR.current}! 🍔\n\n📱 Download the Android app:\nhttps://github.com/Sarvesh-K-E/FoodParkCC/releases/latest\n\n🍎 Use on iPhone / Web:\nhttp://foodparkcc.pages.dev/\n\n🔗 GitHub: https://github.com/Sarvesh-K-E/FoodParkCC`;
+
+    if (Platform.OS === 'web') {
+      const isMobileWeb = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      
+      if (isMobileWeb && navigator.share) {
+        try {
+          const fetchRes = await fetch(selectedQR);
+          const blob = await fetchRes.blob();
+          const file = new File([blob], `order_${activeQR.current}.png`, { type: 'image/png' });
+          
+          await navigator.share({ 
+            text: msg,
+            files: [file]
+          });
+          return;
+        } catch (e: any) {
+          if (e.name === 'AbortError') return;
+          try {
+            await navigator.share({ text: msg });
+            return;
+          } catch (e2: any) {
+            if (e2.name === 'AbortError') return;
+          }
+        }
+      }
+      
+      let success = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          const fetchRes = await fetch(selectedQR);
+          const blob = await fetchRes.blob();
+          // @ts-ignore
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+          success = true;
+        }
+      } catch (err) {}
+
+      if (success) {
+        alert("QR Image copied to clipboard! You can now paste and share it anywhere.");
+      } else {
+        alert("Sharing image is not supported on this browser. Please screenshot the QR code.");
+      }
+    } else {
+      try {
+        await Share.share({ 
+          message: msg,
+          url: selectedQR
+        });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchHistory();
@@ -25,7 +83,7 @@ export default function HistoryScreen() {
   const [selectedQR, setSelectedQR] = useState<string | null>(null);
   const activeQR = useRef<string | null>(null);
   const [loadingQR, setLoadingQR] = useState<string | null>(null);
-  const [selectedOrderItems, setSelectedOrderItems] = useState<any[] | null>(null);
+  const [selectedOrderItems, setSelectedOrderItems] = useState<{id: string, items: any[]} | null>(null);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState<string | null>(null);
   const [debugData, setDebugData] = useState<string>('');
   const [autoBrightness, setAutoBrightness] = useState(false);
@@ -149,7 +207,7 @@ export default function HistoryScreen() {
     try {
       const res = await api.getOrderItems(orderId);
       if (res && Array.isArray(res)) {
-        setSelectedOrderItems(res);
+        setSelectedOrderItems({ id: orderId, items: res });
       } else {
         alert('Could not load order details.');
       }
@@ -245,6 +303,18 @@ export default function HistoryScreen() {
       >
         <Pressable style={styles.modalContainer} onPress={() => { setSelectedQR(null); activeQR.current = null; }}>
           <Pressable style={styles.qrWrapper} onPress={(e) => e.stopPropagation()}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 12, flexWrap: 'wrap' }}>
+              <Text style={[styles.modalTitle, { marginBottom: 4, flexShrink: 1, minWidth: 120, marginRight: 10, textAlign: 'left', fontSize: 16 }]} selectable>#{activeQR.current}</Text>
+              <TouchableOpacity style={[styles.linkBtn, { marginBottom: 4, flexShrink: 0 }]} onPress={handleShareQR}>
+                <Svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke={isDark ? '#F8FAFC' : '#0F172A'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <Circle cx="18" cy="5" r="3" />
+                  <Circle cx="6" cy="12" r="3" />
+                  <Circle cx="18" cy="19" r="3" />
+                  <Path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" />
+                </Svg>
+                <Text style={styles.linkText}>Share</Text>
+              </TouchableOpacity>
+            </View>
             <Image source={{ uri: selectedQR! }} style={styles.qrImage} resizeMode="contain" />
             <TouchableOpacity style={styles.closeBtn} onPress={() => { setSelectedQR(null); activeQR.current = null; }}>
               <Text style={styles.closeBtnText}>Close</Text>
@@ -261,10 +331,10 @@ export default function HistoryScreen() {
       >
         <Pressable style={styles.modalContainer} onPress={() => setSelectedOrderItems(null)}>
           <Pressable style={styles.detailsModalWrapper} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Order Details</Text>
+            <Text style={[styles.modalTitle, { fontSize: 16 }]} selectable>#{selectedOrderItems?.id}</Text>
             <View style={styles.detailsDivider} />
             <ScrollView style={{ width: '100%', maxHeight: 300 }}>
-              {selectedOrderItems?.map((item: any, index: number) => (
+              {selectedOrderItems?.items.map((item: any, index: number) => (
                 <View key={index} style={styles.detailsItemRow}>
                   <View style={styles.detailsItemNameContainer}>
                     <Text style={styles.detailsItemName}>{item.itmdes}</Text>
@@ -421,6 +491,20 @@ const getStyles = (isDark: boolean) => StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+  },
+  linkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: isDark ? '#334155' : '#E2E8F0',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  linkText: {
+    color: isDark ? '#F8FAFC' : '#0F172A',
+    fontSize: 13,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   qrWrapper: {
     backgroundColor: isDark ? '#0F172A' : '#FFFFFF',
