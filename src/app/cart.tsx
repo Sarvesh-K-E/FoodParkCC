@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Modal, Pressable } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { api, getSession, getCart, updateCart, clearCart, setNeedsBalanceReload, getInternetDate } from '../utils/api';
+import { api, getSession, getCart, updateCart, clearCart, setNeedsBalanceReload, getInternetDate, generateAnonymousId } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
+import { usePostHog } from 'posthog-react-native';
 
 export default function CartScreen() {
   const { isDark } = useAppTheme();
@@ -12,6 +13,7 @@ export default function CartScreen() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const posthog = usePostHog();
 
   useFocusEffect(
     React.useCallback(() => {
@@ -170,6 +172,16 @@ export default function CartScreen() {
           api.getQRData(orderNo),
           api.getBalance(session.regNo)
         ]).catch(err => console.error("Failed to sync offline history", err));
+
+        // Truly anonymous tracking for basic data analytics (keeps original user unidentifiable)
+        try {
+          if (posthog) {
+            posthog.capture('Order Placed', {
+              orderAmount: cartTotalPrice,
+              userOrderHash: generateAnonymousId(session.regNo).toString()
+            });
+          }
+        } catch (phErr) {}
 
         clearCart();
         setNeedsBalanceReload(true);

@@ -6,6 +6,9 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { api, getSession, getBrightnessPref, setBrightnessPref } from '../utils/api';
 import { useAppTheme } from '../utils/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
+import * as FileSystem from 'expo-file-system';
+
+let isSharingLock = false;
 
 export default function HistoryScreen() {
   const { isDark } = useAppTheme();
@@ -17,6 +20,9 @@ export default function HistoryScreen() {
   const [isSynced, setIsSynced] = useState(false);
 
   const handleShareQR = async () => {
+    if (isSharingLock) return;
+    isSharingLock = true;
+    setTimeout(() => { isSharingLock = false; }, 1000);
     if (!selectedQR || !activeQR.current) return;
     
     const msg = `Here's my FoodPark QR Code for Order #${activeQR.current}! 🍔\n\n📱 Download the Android app:\nhttps://github.com/Sarvesh-K-E/FoodParkCC/releases/latest\n\n🍎 Use on iPhone / Web:\nhttp://foodparkcc.pages.dev/\n\n🔗 GitHub: https://github.com/Sarvesh-K-E/FoodParkCC`;
@@ -64,10 +70,25 @@ export default function HistoryScreen() {
       }
     } else {
       try {
-        await Share.share({ 
-          message: msg,
-          url: selectedQR
-        });
+        if (Platform.OS === 'android') {
+          // Write the base64 string to a local file in the cache directory
+          const fileUri = FileSystem.cacheDirectory + `order_${activeQR.current}.png`;
+          const base64Data = selectedQR.replace(/^data:image\/png;base64,/, '');
+          await FileSystem.writeAsStringAsync(fileUri, base64Data, { encoding: FileSystem.EncodingType.Base64 });
+          
+          // Generate a content:// URI using the internal FileProvider
+          const contentUri = await FileSystem.getContentUriAsync(fileUri);
+          
+          await Share.share({ 
+            message: msg,
+            url: contentUri
+          });
+        } else {
+          await Share.share({ 
+            message: msg,
+            url: selectedQR
+          });
+        }
       } catch (error) {
         console.log('Error sharing:', error);
       }
