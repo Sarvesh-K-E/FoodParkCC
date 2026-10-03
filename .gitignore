@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+release.keystore
+keystore_base64.txt
