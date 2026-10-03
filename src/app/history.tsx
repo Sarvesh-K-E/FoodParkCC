@@ -24,7 +24,7 @@ export default function HistoryScreen() {
     setTimeout(() => { isSharingLock = false; }, 1000);
     if (!selectedQR || !activeQR.current) return;
     
-    const msg = `QR Code: https://quickchart.io/qr?text=${activeQR.current}&size=300\n\nHere's my FoodPark QR Code for Order #${activeQR.current}! 🍔\n\n🍎 Use on iPhone / Web:\nhttp://foodparkcc.pages.dev/`;
+    const msg = `QR Code: https://quickchart.io/qr?text=${activeQR.current}&size=300\n\nHere's my FoodPark QR Code for Order #${activeQR.current}! 🍔\n\nWebsite:\nhttp://foodparkcc.pages.dev/`;
 
     if (Platform.OS === 'web') {
       const isMobileWeb = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
